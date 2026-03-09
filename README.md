@@ -1,155 +1,417 @@
 # NovaCred Credit Application Governance Analysis
 
-## DEGO 2606 — Data Ecosystems and Governance in Organizations  
-MSc Business Analytics | Nova SBE
+**DEGO 2606 — Data Ecosystems and Governance in Organizations**
+MSc Business Analytics | Nova SBE | Group TXB · Team 14
 
-Acting as a Data Governance Task Force, our team evaluates a credit application dataset from three connected perspectives: data quality, fairness in lending outcomes, and privacy and regulatory governance. The project is set in a credit approval context in which poor data quality, biased decision patterns, and weak governance controls would all create material operational, ethical, and regulatory risk.
+> Acting as a Data Governance Task Force, we audit NovaCred's raw credit application dataset for data quality failures, fairness violations, and privacy and regulatory compliance gaps. The three dimensions are structurally linked: weak input data undermines the credibility of fairness analysis, and fairness violations raise stronger compliance obligations under GDPR and the EU AI Act.
 
-Rather than treating these topics as separate exercises, the project approaches them as one governance problem. Weak input quality affects the credibility of fairness analysis, while fairness concerns and the handling of personal data raise broader obligations under GDPR and the EU AI Act.
+---
 
-## Team Members and Roles
+## Team
 
-| Name | Student Number | Role | Main Responsibility |
+| Name | ID | Role | Responsibility |
 |---|---:|---|---|
-| Eda Jülide Pürsün | 74935 | Product Lead | Repository documentation, project framing, presentation preparation, final integration |
-| João Marques Roque | 73047 | Data Engineer | Data loading, cleaning logic, technical preparation of the dataset |
-| Maddalena Manfredi | 71946 | Data Scientist | Bias and fairness analysis, interpretation of disparities and statistical results |
-| Lucas Galilei | 70270 | Governance Officer | Privacy, GDPR, and policy-oriented governance layer |
+| Eda Jülide Pürsün | 74935 | Product Lead | Coordination, README, presentation, final integration |
+| João Marques Roque | 73047 | Data Engineer | Data loading, flattening, cleaning pipeline, repository |
+| Maddalena Manfredi | 71946 | Data Scientist | Bias analysis, statistical testing, proxy and subgroup analysis |
+| Lucas Galilei | 70270 | Governance Officer | PII inventory, GDPR mapping, EU AI Act classification |
+
+---
 
 ## Repository Structure
 
-| Path | Purpose |
-|---|---|
-| `Data/` | Project data resources |
-| `Notebooks/01-data-quality.ipynb` | Data quality assessment and remediation logic |
-| `Notebooks/02-bias-analysis.ipynb` | Fairness and bias analysis |
-| `Notebooks/03-privacy-demo.ipynb` | Privacy, GDPR, and governance extension |
-| `README.md` | Project overview and summary of findings |
+```
+project-team14-TXB/
+├── README.md
+├── Data/
+│   ├── raw_credit_applications.json
+│   └── flat_credit_applications.parquet
+├── Notebooks/
+│   ├── 01-data-quality.ipynb        # DQ audit, cleaning pipeline, df_clean
+│   ├── 02-bias-analysis.ipynb       # Fairness metrics, proxy, subgroup analysis
+│   └── 03-privacy-demo.ipynb        # PII inventory, GDPR gap analysis, pseudonymisation
+└── presentation/
+```
 
-## Analytical Workflow
-
-The project is organised in three analytical layers.
-
-The first layer evaluates whether the raw credit application data is sufficiently reliable for downstream use. Before fairness or governance conclusions can be drawn, the dataset must be assessed for completeness, validity, plausibility, and internal consistency.
-
-The second layer investigates whether approval outcomes differ systematically across demographic groups. This part moves from data preparation into fairness assessment and asks whether the observed decisions raise potential bias concerns.
-
-The third layer extends the analysis into privacy and governance. In a credit decision setting, analytical outputs alone are not enough. The broader decision pipeline must also be assessed in terms of accountability, lawful processing, minimisation, retention, documentation, and oversight.
+---
 
 ## Executive Summary
 
-The project shows that governance risks in credit decisioning cannot be reduced to model output alone. The data quality analysis finds that the dataset is usable for analysis, but affected by concentrated missingness, duplicate primary identifiers, and selected validity and formatting issues. A governance-oriented de-duplication step reduces the working dataset from 502 to 500 records by keeping the most complete record for duplicated application IDs.
+NovaCred's credit application dataset and decision pipeline contain material governance failures across all three dimensions audited.
 
-The fairness analysis identifies meaningful disparities in approval outcomes across demographic groups. Female applicants receive approvals at a lower rate than male applicants, and the Disparate Impact ratio falls below the common four-fifths threshold. Age-based differences are also visible, with younger applicants showing weaker approval outcomes than the middle-age range. The strongest subgroup disparity appears among younger applicants.
+On **data quality**, the raw dataset contains 502 records, two of which appear twice with conflicting values — not ingestion duplicates, but conflicting entries indicating a record integrity failure. After governance-oriented de-duplication the working dataset is 500 records across 34 columns. Additional issues include inconsistent gender coding across five variants, date-of-birth stored in four distinct formats, an undocumented income field duplication, invalid numeric values, and 11 email addresses failing structural validation. Governance-sensitive fields — identifiers, decision outcomes, rejection reasons — are never imputed.
 
-Taken together, the project suggests that reliable records, fair treatment across groups, and defensible handling of personal data must be treated as interdependent requirements rather than separate workstreams.
+On **algorithmic fairness**, female applicants are approved at 50.6% versus 65.7% for males, producing a Disparate Impact ratio of 0.77 — below the legally significant 0.80 four-fifths threshold (p < 0.001). Age-based disparities are equally significant: the 18–30 cohort has a 44.5% approval rate versus 68.7% for 41–50 year-olds (age DI = 0.648). ZIP code functions as a near-perfect gender proxy (correlation = −0.805), replicating the gender gap even after gender is excluded from the model. The most severe subgroup disparity is among women aged 25–34 — a 23 pp gap versus male counterparts confirmed statistically within that cohort (p = 0.008).
+
+On **privacy and governance**, all direct identifiers — full name, SSN, email, and IP address — are stored in plaintext with no encryption, pseudonymisation, or access controls. There is no documented lawful processing basis, no consent tracking, no retention policy, and no deletion mechanism. Of 500 applications, 169 automated rejections were issued with no human review, no explanation, and no appeal pathway — a direct violation of GDPR Article 22. The system qualifies as High-Risk under EU AI Act Annex III and currently meets none of the required controls.
+
+---
 
 ## Dataset Overview
+
+```
++--------------------------------------------------+
+|  Raw records:            502                      |
+|  After de-duplication:   500   (-2)               |
+|  Columns in scope:        34                      |
+|  Approved loans:         290 / 500  (58.0%)       |
+|  Rejected loans:         210 / 500  (42.0%)       |
+|  Automated rejections:   169   (no human review)  |
+|  GDPR / AI Act gaps:       8                      |
++--------------------------------------------------+
+```
+
+---
+
+## Notebook 01 — Data Quality Assessment
+
+**Owner:** João Marques Roque | **Role:** Data Engineer
+
+The notebook flattens the nested JSON structure into a tabular format and assesses the dataset across four dimensions: completeness, consistency, validity, and accuracy. All issues are numbered and documented below. No records are silently dropped, every decision is justified and reflected in the notebook.
+
+### Dataset Size Progression
+
+| Stage | Rows | Notes |
+|---|---:|---|
+| Raw (`df_raw`) | 502 | After loading `raw_credit_applications.json` |
+| After Completeness | 502 | No rows dropped — missingness flagged |
+| After Consistency | 502 | No rows dropped — normalised in place |
+| After Validity | 502 | No rows dropped — impossible values set to NaN |
+| After Accuracy | 500 | −2 duplicate `_id` rows removed |
+| **Final (`df_clean`)** | **500** | **99.6% data retention** |
+
+---
+
+### Completeness
+
+#### Issue 1 — Missing `processing_timestamp` *(438 records, 87.6%)*
+
+**Finding:** 438 of 502 raw records have no `processing_timestamp`. This is a systemic pipeline defect — the field was never populated for the majority of applications.
+
+**Governance impact:** Without timestamps, NovaCred cannot enforce a data retention or deletion schedule. A retention policy is legally required under GDPR Art. 5(1)(e) but is unenforceable without knowing when data was collected.
+
+**Action:** Not imputed. Documented as a structural completeness failure and flagged as Governance Gap 03.
+
+---
+
+#### Issue 2 — Missing `loan_purpose` *(450 records, 90.0%)*
+
+**Finding:** 90% of records have no recorded loan purpose. The field was not collected for most applications.
+
+**Governance impact:** Purpose documentation is required under GDPR Art. 5(1)(b). The absence makes it impossible to verify data is being used for its stated purpose.
+
+**Action:** Not imputed. Documented as a structural completeness failure.
+
+---
+
+#### Issue 3 — Missing `rejection_reason` *(structural — 58.2% of records)*
+
+**Finding:** Rejection reason is absent for all approved applications (structurally expected) and for many rejections. 169 automated rejections have no rejection reason recorded.
+
+**Governance impact:** GDPR Art. 22(3) and EU AI Act Art. 13 require automated decisions to be explainable. Missing rejection reasons are themselves a compliance failure, not merely a data quality issue.
+
+**Action:** Not imputed. Fabricating a rejection reason would corrupt audit-relevant data.
+
+---
+
+### Consistency
+
+#### Issue 4 — Inconsistent gender coding *(113 records, 22.6%)*
+
+**Finding:** The `gender` field uses five representations for two logical values: `"Male"`, `"M"`, `"Female"`, `"F"`, and empty/null.
+
+**Action:** Normalised to a controlled vocabulary of `Male / Female / Unknown`. Empty values set to `Unknown`, a protected attribute is never imputed, as assigning the majority class would silently encode demographic assumptions.
+
+---
+
+#### Issue 5 — `date_of_birth` stored in four distinct formats
+
+**Finding:** DOB is stored across four formats with no consistent standard applied:
+
+| Format | Example |
+|---|---|
+| `YYYY-MM-DD` (ISO 8601) | `1990-07-15` |
+| `YYYY/MM/DD` | `1990/07/15` |
+| `DD/MM/YYYY` (EU) | `15/07/1990` |
+| `MM/DD/YYYY` (US) | `07/15/1990` |
+
+Records where day ≤ 12 are ambiguous between EU and US formats.
+
+**Action:** Parsed individually by regex. Ambiguous dates treated as European convention (DD/MM), the defensible default for a European-facing application. Standardised to ISO 8601.
+
+---
+
+#### Issue 6 — `annual_salary` and `annual_income` encode the same field
+
+**Finding:** Two columns existed for income. Some records populated `annual_salary`, others `annual_income`, a small number populated both. The duplication was undocumented — there is no data dictionary entry clarifying which field was authoritative.
+
+**Action:** Coalesced `annual_salary → annual_income` where `annual_income` was null. `annual_salary` dropped after merge. Data type corrected from `object` to `float`.
+
+---
+
+### Validity
+
+#### Issue 7 — Negative `credit_history_months` *(2 records, 0.4%)*
+
+**Finding:** 2 records have a negative credit history — a data-entry error (likely a sign flip).
+
+**Action:** Set to `NaN`. Imputed with median of non-negative values.
+
+---
+
+#### Issue 8 — `debt_to_income` > 1.0 *(1 record, 0.2%)*
+
+**Finding:** 1 record has a DTI ratio exceeding 1.0, meaning recorded debt exceeds income, not a valid financial state.
+
+**Action:** Set to `NaN`. Not imputed — DTI is decision-relevant and imputing it would introduce noise into downstream fairness analysis.
+
+---
+
+#### Issue 9 — Invalid email addresses *(11 records, 2.2%)*
+
+**Finding:** 11 email addresses fail structural validation (missing `@`, invalid domain, truncated values). Some also contain what appears to be a different person's name in the local part.
+
+**Action:** Set to `NaN`. Records retained — financial and demographic data remains valid; only email-dependent pipeline steps must exclude these records.
+
+---
+
+#### Issue 10 — ZIP code format violation *(1 record, 0.2%)*
+
+**Finding:** 1 record has a ZIP code not conforming to the expected 5-digit format.
+
+**Action:** Flagged. Not silently corrected — the correct value cannot be inferred.
+
+---
+
+### Accuracy
+
+#### Issue 11 — Duplicate `_id` records with conflicting values *(2 pairs → 2 removed)*
+
+**Finding:** `app_001` and `app_042` each appear twice. The duplicate entries have conflicting field values, these are not ingestion duplicates but a record integrity failure. Both cases were identifiable via the `notes` field (`RESUBMISSION`, `DUPLICATE_ENTRY_ERROR`).
+
+**Action:** Retained the most complete record per `_id`. Dataset reduced from 502 → 500. Primary key uniqueness restored.
+
+---
+
+#### Issue 12 — Zero income *(1 record)*
+
+**Finding:** 1 record has `annual_income = 0`, not a valid income value (distinct from missing — this is a recorded zero, not a null).
+
+**Action:** Set to `NaN`. Not imputed.
+
+---
+
+### Post-Cleaning Summary
 
 | Metric | Value |
 |---|---:|
 | Raw records | 502 |
-| Records after de-duplication | 500 |
-| Duplicate application IDs removed | 2 |
-| Project focus areas | Data quality, fairness, privacy/governance |
+| Records after de-duplication | **500** |
+| Columns in `df_clean` | **34** |
+| Governance-sensitive fields imputed | **0** |
+| Cross-field consistency violations | **0** |
+| Spending behaviour structural issues | **0** |
 
-## Notebook 1 — Data Quality Assessment
+---
 
-The first notebook evaluates whether the raw credit application data is sufficiently robust for downstream use. The nested JSON structure is flattened into a tabular format and then assessed across key quality dimensions including completeness, uniqueness, validity, plausibility, and cross-field consistency.
+## Notebook 02 — Bias and Fairness Analysis
 
-A major strength of this notebook is its governance-aware remediation logic. High-missingness columns are removed where they add little analytical value, while governance-sensitive fields such as identifiers, PII attributes, timestamps, decision outcomes, and rejection reasons are intentionally not imputed. Missingness indicators are created before imputation in order to preserve transparency around original data limitations.
+**Owner:** Maddalena Manfredi | **Role:** Data Scientist
 
-### Data Quality Highlights
+The notebook investigates whether loan approval outcomes differ systematically across demographic groups. Methods: Disparate Impact ratio (four-fifths rule), chi-square independence tests, Cramér's V effect size, Fairlearn DPR/DPD, proxy discrimination correlation scan, and intersectional subgroup analysis.
 
-| Area | Main Finding | Governance Interpretation |
-|---|---|---|
-| Uniqueness | Duplicate `_id` values were conflicting, not identical | Record integrity issue rather than simple ingestion duplication |
-| Remediation | Most complete record per duplicated `_id` retained | Traceability preserved while restoring primary-key uniqueness |
-| Missingness | Columns with ≥90% missing values removed | Weak capture governance or low analytical value |
-| Imputation policy | Governance-sensitive fields were not imputed | Prevents fabrication of audit-relevant information |
+### Gender Disparate Impact
 
-### Data Quality Summary Table
+```
+Approval Rate by Gender
+==============================================
+Female (n=251)  |####################      |  50.6%
+Male   (n=248)  |##########################|  65.7%
+                 ---- 4/5 threshold: 52.6% ---
+                 Female is BELOW threshold
 
-| Metric | Value |
-|---|---:|
-| Raw dataset size | 502 |
-| Final dataset size after de-duplication | 500 |
-| Duplicate records removed | 2 |
-| High-missingness threshold | 90% |
-| Governance-sensitive fields imputed | No |
+DI ratio           =  50.6 / 65.7  =  0.77   FAIL (threshold: 0.80)
+Chi-square p-value                  <  0.001
+Cramer's V (effect size)            =  0.149
+Fairlearn DPR                       =  0.767
+Fairlearn DPD                       =  0.154
+Absolute approval gap               =  15.1 pp
+```
 
-## Notebook 2 — Bias and Fairness Analysis
+**Interpretation:** The DI ratio of 0.77 falls below the legally significant 0.80 four-fifths threshold. The chi-square result (p < 0.001) confirms the pattern is not attributable to sampling noise. Cramér's V = 0.149 indicates a small but statistically robust and practically significant effect.
 
-The second notebook investigates whether loan approval outcomes differ systematically across demographic groups. The analysis focuses primarily on gender and age and uses approval-rate comparisons, Disparate Impact ratios, chi-square testing, subgroup analysis, and exploratory proxy-risk checks.
+---
 
-The clearest fairness signal concerns gender. Female applicants have a lower approval rate than male applicants, and the resulting DI ratio falls below the four-fifths threshold. The chi-square test further indicates that this disparity is statistically significant.
+### Age-Based Disparate Impact
 
-Age-based patterns are also visible. The notebook reports that applicants aged 18–35 show significantly weaker approval outcomes than those aged 36–65. The interaction analysis suggests that the gender gap is especially pronounced among younger applicants, which makes subgroup-level fairness monitoring particularly relevant.
+```
+Approval Rate by Age Group (%)
+==============================================
+18-30  |#################         |  44.5%   LOWEST
+31-40  |########################  |  61.7%
+41-50  |##########################|  68.7%   PEAK
+51-65  |########################  |  58.1%
 
-### Fairness Highlights
+Age DI (18-30 vs 41-50)  =  0.648   FAIL (threshold: 0.80)
+Chi-square p-value        =  0.0004
+Fairlearn DPD             =  0.242   (24.2 pp range)
+```
 
-| Test / Metric | Result | Interpretation |
-|---|---:|---|
-| Female approval rate | 127 / 251 ≈ 50.6% | Lower than male approval rate |
-| Male approval rate | 163 / 248 ≈ 65.7% | Higher approval outcome |
-| Gender DI ratio | 0.77 | Below the 0.80 threshold |
-| Gender chi-square p-value | 0.0009 | Statistically significant disparity |
-| Age 18–35 vs 36–65 p-value | 0.0004 | Significant age-related disparity |
-| Young subgroup gender p-value | 0.0088 | Strongest gender difference among younger applicants |
+**Interpretation:** Younger applicants face structural disadvantage. The 18–30 cohort is 24.2 percentage points below the peak approval group. Age DI = 0.648 is substantially below the legal threshold.
 
-### Fairness Interpretation
+---
 
-The gender results indicate potential adverse impact rather than random fluctuation. The age analysis shows that fairness concerns are not confined to one protected attribute. The interaction analysis is especially important because it shows that aggregate fairness metrics can hide where disparities are concentrated most strongly.
+### Intersectional Analysis — Gender × Age
 
-## Notebook 3 — Privacy and Governance
+| Age Group | Female Rate | Male Rate | Gap | Status |
+|---|---:|---:|---:|---|
+| 18–24 | 50.0% | 60.0% | 10.0 pp | ⚠ Low sample (n<20) |
+| **25–34** | **33.3%** | **56.3%** | **23.0 pp** | **✗ Most Severe** |
+| 35–44 | 60.0% | 72.0% | 12.0 pp | ✓ Acceptable |
+| 45–54 | 61.0% | 66.0% | 5.0 pp | ✓ Acceptable |
+| **55–64** | **54.8%** | **72.0%** | **17.2 pp** | **✗ Severe** |
+| 65+ | 50.0% | 60.0% | 10.0 pp | ⚠ Low sample (n<20) |
 
-The third notebook is intended to extend the project into privacy, GDPR, and AI governance. This component connects the analytical findings to broader governance questions such as data minimisation, lawful processing, retention, documentation, transparency, and human oversight.
+**Key finding:** Female 25–34 subgroup shows the largest approval gap in the dataset (23 pp, p = 0.008 within that cohort). The 55–64 cohort shows a secondary severe gap (17.2 pp). Neither finding surfaces in aggregate-level DI metrics. **Worst case: Female 18–30 (32.8%) vs Male 41–50 (76.0%) = 43.2 pp gap.**
 
-At the current repository stage, this part is still being consolidated. The governance layer will be expanded and finalised in the final project version, where it will be linked more explicitly to the findings from the data quality and fairness notebooks.
+---
 
-### Governance Scope
+### Proxy Discrimination
 
-| Governance Area | Current Focus |
-|---|---|
-| Privacy | Personal-data handling in a credit decision context |
-| GDPR | Lawful processing, minimisation, transparency, accountability |
-| AI Governance | Oversight, documentation, and defensibility of decision logic |
-| Finalisation status | To be completed in final project version |
+A proxy variable is a non-protected feature that is highly correlated with a protected attribute AND with the approval outcome. Including a proxy replicates discriminatory outcomes without directly referencing the protected group.
 
-## Main Findings
+**Flagging criteria:** `|corr_gender| > 0.3` OR `|corr_age| > 0.3`
 
-| Theme | Main Conclusion |
-|---|---|
-| Data Quality | The dataset is usable, but not uniformly reliable across all fields |
-| Record Integrity | Duplicate identifiers weaken traceability and confidence in downstream use |
-| Fairness | Approval outcomes differ meaningfully by gender and age |
-| Governance | Data quality, fairness, and privacy are structurally linked |
+| Variable | Corr / Gender | Corr / Age | Corr / Outcome | Assessment |
+|---|---:|---:|---:|---|
+| `zip_code` | **−0.805** | — | −0.126 | **High — strongest gender proxy** |
+| `credit_history_months` | — | **+0.649** | +0.150 | **High — primary age proxy** |
+| `annual_income` | — | +0.390 | +0.180 | Medium proxy risk |
 
-## Governance Relevance
+**ZIP code:** Excludes gender from the model but retaining ZIP code does not resolve the discrimination — the approval gap is replicated through the proxy. ZIP code must be excluded or transformed before training.
 
-The broader implication of the project is that governance begins before any model is deployed. If the input records are weak, fairness analysis becomes less credible. If approval outcomes differ systematically across groups, the organisation faces stronger obligations around monitoring, review, and explainability. If personal data is used in a sensitive financial context, privacy-by-design and accountability expectations cannot be treated as optional.
+**Credit history:** Younger applicants mechanically accumulate shorter credit histories not because they are worse credit risks, but because they have had fewer years to build history. Using raw `credit_history_months` creates a structural age penalty independent of creditworthiness.
 
-For that reason, the credit application pipeline should not be understood simply as a technical workflow. It should be treated as a governance object that requires documentation, defensible design choices, and continuous oversight across the full lifecycle of data collection, analysis, and decision-making.
+---
 
-## Figures
+## Notebook 03 — Privacy, GDPR, and Governance
 
-The following visuals are intended to be added once the final plot exports are uploaded to the repository.
+**Owner:** Lucas Galilei | **Role:** Governance Officer
 
-### Planned Figure 1 — Approval Rate by Gender
-<!-- Example after upload:
-![Approval Rate by Gender](reports/approval_rate_by_gender.png)
--->
+### PII Inventory
 
-### Planned Figure 2 — Approval Rate by Age Group
-<!-- Example after upload:
-![Approval Rate by Age Group](reports/approval_rate_by_age_group.png)
--->
+| Field | Category | Risk | Records | Key Finding |
+|---|---|---|---:|---|
+| `full_name` | Direct Identifier | Critical | 500 | Stored in plaintext — must pseudonymise |
+| `ssn` | Direct Identifier | Critical | 500 | Stored in plaintext — tokenisation required |
+| `email` | Direct Identifier | High | 493 | Stored in plaintext — remove from analytical layer |
+| `ip_address` | Technical Identifier | High | 500 | No modelling value — delete entirely (GDPR Art. 4(1)) |
+| `gender` | Protected Attribute | High | 500 | DI = 0.77 confirmed — exclude from all model inputs |
+| `zip_code` | Quasi-Identifier | High | 499 | Gender proxy corr = −0.805 — transform or exclude |
+| `date_of_birth` | Quasi-Identifier | High | 470 | Full date exceeds minimisation — generalise to `age_group` |
+| `annual_income` | Quasi-Identifier | Medium | 500 | Undocumented merge origin — use income brackets |
+| `healthcare / gambling spend` | Sensitive Behavioural | Medium | 68 / 7 | Purpose undocumented — GDPR Art. 9 applies |
+| `loan_approved` | Decision Output | Medium | 500 | Automated decision — GDPR Art. 22 + EU AI Act Annex III |
 
-### Planned Figure 3 — Approval Rate by Age Group and Gender
-<!-- Example after upload:
-![Approval Rate by Age Group and Gender](reports/approval_rate_by_age_gender.png)
--->
+---
 
-## Next Step
+### GDPR Gap Analysis
 
-The final project version will complete the governance layer and connect the privacy and regulatory assessment more explicitly to the data quality and fairness findings already established in the first two notebooks.
+| # | Gap Area | Current State | Regulatory Anchor |
+|---|---|---|---|
+| 01 | Lawful basis | No documented processing basis or consent evidence | GDPR Art. 6 / 13 |
+| 02 | Special-category data | Healthcare and gambling spend processed without documented basis | GDPR Art. 9 |
+| 03 | Data subject rights | No access, erasure, explanation, or contestability mechanism | GDPR Art. 15–22 |
+| 04 | Security controls | No encryption, RBAC, access logging, or pseudonymisation | GDPR Art. 25 / 32 |
+| 05 | Retention and deletion | No retention policy, timestamps, or automated deletion | GDPR Art. 5(1)(e) / 17 |
+| 06 | Automated decisions | 169 rejections issued without human review or explanation | GDPR Art. 22 |
+| 07 | No audit trail | No `decision_id`, `model_version`, or `decision_timestamp` fields | EU AI Act Art. 12 / 13 |
+| 08 | High-Risk AI system | Qualifies under Annex III — zero conformity controls in place | EU AI Act Art. 6 / 10 |
+
+---
+
+### EU AI Act Classification
+
+```
+System: NovaCred credit scoring model
+Classification: HIGH-RISK (Annex III — creditworthiness assessment)
+
+Required Control            | Status
+----------------------------+---------------------------
+Risk management system      | [MISSING]
+Data governance controls    | [MISSING]
+Human oversight mechanism   | [MISSING]
+Transparency and logging    | [MISSING]
+Conformity assessment       | [NOT CONDUCTED]
+```
+
+---
+
+### Pseudonymisation Demonstration
+
+Notebook 03 demonstrates SHA-256 pseudonymisation applied to `full_name`, `email`, and `ssn`:
+
+```python
+import hashlib
+
+def pseudonymise(value: str) -> str:
+    return hashlib.sha256(value.encode()).hexdigest()
+
+# Before: "John Smith"   | "123-45-6789"
+# After:  "a8f3c2d1..."  | "9e7b4f21..."
+# Internal record linkage preserved. Direct identification prevented.
+# Aligned with GDPR Art. 5(1)(c) and Art. 32.
+```
+
+A **right-to-erasure simulation** (GDPR Art. 17) is also demonstrated, replacing all direct and quasi-identifier fields for a given applicant with `[ERASED]` and documenting the governance infrastructure a production erasure workflow would require.
+
+---
+
+## Governance Recommendations
+
+| Priority | Timeline | Action | Regulatory Basis |
+|---|---|---|---|
+| Immediate | 0–30d | Pseudonymise SSN; remove `full_name`, `email`, `ip_address` from analytical layer | GDPR Art. 32 |
+| Immediate | 0–30d | Exclude `gender` and `zip_code` from model training | GDPR Art. 22 |
+| Immediate | 0–30d | Generalise `date_of_birth` to `age_group` | GDPR Art. 5(1)(c) |
+| Immediate | 0–30d | Add consent capture mechanism | GDPR Art. 6 / 7 |
+| Immediate | 0–30d | Mask IP address; generalise ZIP to NUTS-2 region | GDPR Art. 4(1) |
+| Short-term | 30–90d | Implement decision audit log (`decision_id`, `model_version`, `timestamp`) | EU AI Act Art. 12 |
+| Short-term | 30–90d | Mandate human review for all automated rejections | GDPR Art. 22, AI Act Art. 14 |
+| Short-term | 30–90d | Build right-to-erasure API | GDPR Art. 17 |
+| Short-term | 30–90d | Define and automate retention and deletion schedule | GDPR Art. 5(1)(e) |
+| Short-term | 30–90d | Implement role-based access control | GDPR Art. 25 / 32 |
+| Medium-term | 90–180d | Conduct DPIA and EU AI Act conformity assessment | EU AI Act Art. 6 / 9 |
+| Medium-term | 90–180d | Deploy fairness monitoring dashboard (subgroup-level metrics) | AI Act Art. 10 / 14 |
+| Medium-term | 90–180d | Implement SHAP/LIME explanation layer for credit decisions | GDPR Art. 22(3), AI Act Art. 13 |
+| Medium-term | 90–180d | Appoint Data Protection Officer | GDPR Art. 37 |
+| Medium-term | 90–180d | Privacy-by-design review of full data pipeline | GDPR Art. 25 |
+
+---
+
+## Broader Governance Implication
+
+The credit application pipeline is not a technical artefact — it is a governance object carrying obligations across the full data lifecycle: collection, processing, decision-making, retention, and deletion. Data quality failures reduce the credibility of fairness analysis. Fairness violations raise stronger obligations around monitoring and human oversight. The use of personal data in high-stakes financial decisions places the system firmly under GDPR and EU AI Act High-Risk requirements.
+
+None of these obligations can be addressed in isolation. Remediation requires coordinated changes to data architecture, model design, and operational process — not only to analytical notebooks.
+
+---
+
+## Key Numbers — Quick Reference
+
+```
+502 -> 500   records after de-duplication
+        34   columns in cleaned dataset
+      0.77   gender DI ratio  (legal threshold: 0.80)  FAIL
+     0.648   age DI ratio, youngest vs peak cohort     FAIL
+    -0.805   ZIP code correlation with gender (p = 0.005)
+      23 pp  largest subgroup gap (female vs male, 25-34)
+    43.2 pp  worst intersectional gap (female 18-30 vs male 41-50)
+       169   automated rejections — no human review or explanation
+         8   GDPR / AI Act compliance gaps identified
+         5   direct/quasi-identifiers stored in plaintext
+```
+
+---
+
+*DEGO 2606 — Group Project | Team 14 TXB | Nova SBE*
