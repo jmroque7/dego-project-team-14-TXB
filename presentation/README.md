@@ -1,4 +1,4 @@
 # Presentation
 
-Video: [link to be added]
-Slides: [link to be added]
+Video: https://youtu.be/llpv-F1YpHY
+Slides: [to be added]
