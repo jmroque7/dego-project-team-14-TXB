@@ -67,7 +67,7 @@ On **privacy and governance**, all direct identifiers — full name, SSN, email,
 
 **Owner:** João Marques Roque | **Role:** Data Engineer
 
-The notebook flattens the nested JSON structure into a tabular format and assesses the dataset across four dimensions: completeness, consistency, validity, and accuracy. All issues are numbered and documented below. No records are silently dropped, every decision is justified and reflected in the notebook.
+The notebook flattens the nested JSON structure into a tabular format and assesses the dataset across four dimensions: completeness, consistency, validity, and accuracy. All issues are numbered and documented below. No records are silently dropped — every decision is justified and reflected in the notebook.
 
 ### Dataset Size Progression
 
@@ -108,7 +108,7 @@ The notebook flattens the nested JSON structure into a tabular format and assess
 
 **Finding:** Rejection reason is absent for all approved applications (structurally expected) and for many rejections. 169 automated rejections have no rejection reason recorded.
 
-**Governance impact:** GDPR Art. 22(3) and EU AI Act Art. 13 require automated decisions to be explainable. Missing rejection reasons are themselves a compliance failure, not merely a data quality issue.
+**Governance impact:** GDPR Art. 22(3) and EU AI Act Art. 13 require automated decisions to be explainable. Missing rejection reasons are themselves a compliance failure — not merely a data quality issue.
 
 **Action:** Not imputed. Fabricating a rejection reason would corrupt audit-relevant data.
 
@@ -120,7 +120,7 @@ The notebook flattens the nested JSON structure into a tabular format and assess
 
 **Finding:** The `gender` field uses five representations for two logical values: `"Male"`, `"M"`, `"Female"`, `"F"`, and empty/null.
 
-**Action:** Normalised to a controlled vocabulary of `Male / Female / Unknown`. Empty values set to `Unknown`, a protected attribute is never imputed, as assigning the majority class would silently encode demographic assumptions.
+**Action:** Normalised to a controlled vocabulary of `Male / Female / Unknown`. Empty values set to `Unknown` — a protected attribute is never imputed, as assigning the majority class would silently encode demographic assumptions.
 
 ---
 
@@ -137,7 +137,7 @@ The notebook flattens the nested JSON structure into a tabular format and assess
 
 Records where day ≤ 12 are ambiguous between EU and US formats.
 
-**Action:** Parsed individually by regex. Ambiguous dates treated as European convention (DD/MM), the defensible default for a European-facing application. Standardised to ISO 8601.
+**Action:** Parsed individually by regex. Ambiguous dates treated as European convention (DD/MM) — the defensible default for a European-facing application. Standardised to ISO 8601.
 
 ---
 
@@ -161,7 +161,7 @@ Records where day ≤ 12 are ambiguous between EU and US formats.
 
 #### Issue 8 — `debt_to_income` > 1.0 *(1 record, 0.2%)*
 
-**Finding:** 1 record has a DTI ratio exceeding 1.0, meaning recorded debt exceeds income, not a valid financial state.
+**Finding:** 1 record has a DTI ratio exceeding 1.0, meaning recorded debt exceeds income — not a valid financial state.
 
 **Action:** Set to `NaN`. Not imputed — DTI is decision-relevant and imputing it would introduce noise into downstream fairness analysis.
 
@@ -187,7 +187,7 @@ Records where day ≤ 12 are ambiguous between EU and US formats.
 
 #### Issue 11 — Duplicate `_id` records with conflicting values *(2 pairs → 2 removed)*
 
-**Finding:** `app_001` and `app_042` each appear twice. The duplicate entries have conflicting field values, these are not ingestion duplicates but a record integrity failure. Both cases were identifiable via the `notes` field (`RESUBMISSION`, `DUPLICATE_ENTRY_ERROR`).
+**Finding:** `app_001` and `app_042` each appear twice. The duplicate entries have conflicting field values — these are not ingestion duplicates but a record integrity failure. Both cases were identifiable via the `notes` field (`RESUBMISSION`, `DUPLICATE_ENTRY_ERROR`).
 
 **Action:** Retained the most complete record per `_id`. Dataset reduced from 502 → 500. Primary key uniqueness restored.
 
@@ -386,6 +386,44 @@ A **right-to-erasure simulation** (GDPR Art. 17) is also demonstrated, replacing
 | Medium-term | 90–180d | Implement SHAP/LIME explanation layer for credit decisions | GDPR Art. 22(3), AI Act Art. 13 |
 | Medium-term | 90–180d | Appoint Data Protection Officer | GDPR Art. 37 |
 | Medium-term | 90–180d | Privacy-by-design review of full data pipeline | GDPR Art. 25 |
+
+---
+
+## Figures
+
+All figures are generated directly from the cleaned dataset (`Data/flat_credit_applications.parquet`) in Notebook 02. They are reproducible by re-running the notebook end-to-end.
+
+---
+
+### Figure 1 — Approval Rate by Gender (Four-Fifths Rule)
+
+![Approval Rate by Gender](reports/figures/fig1_approval_by_gender.png)
+
+Female applicants are approved at 50.6% vs 65.7% for male applicants. The Disparate Impact ratio of 0.77 falls below the legally significant 0.80 four-fifths threshold (chi-square p < 0.001). The dashed line marks the minimum approval rate female applicants would need to meet for the system to pass the four-fifths rule.
+
+---
+
+### Figure 2 — Approval Rate by Age Group (Disparate Impact Analysis)
+
+![Approval Rate by Age Group](reports/figures/fig2_approval_by_age.png)
+
+The 18–30 cohort is approved at only 38.5% versus 70.5% for the peak 41–50 group — an age Disparate Impact ratio of 0.546, far below the 0.80 threshold (p = 0.0004). Younger applicants are structurally disadvantaged, partly because credit\_history\_months acts as an age proxy.
+
+---
+
+### Figure 3 — Intersectional Bias: Gender × Age Group
+
+![Intersectional Bias Gender x Age](reports/figures/fig3_approval_gender_x_age.png)
+
+Intersectional analysis reveals disparities invisible in single-axis metrics. The most severe subgroup gap is in the 18–30 cohort: female applicants approved at 30% vs 50% for males (20 pp gap). The 51–65 cohort shows a secondary severe gap of 15 pp. Aggregate DI ratios alone would not surface these patterns.
+
+---
+
+### Figure 4 — Rejection Reason Breakdown
+
+![Rejection Reason Breakdown](reports/figures/fig4_rejection_reasons.png)
+
+Of 210 total rejections, 169 (80.5%) cite `algorithm_risk_score` as the sole reason. These rejections were issued with no human review, no plain-language explanation, and no appeal pathway — a direct violation of GDPR Article 22 and EU AI Act Article 14. The remaining 41 rejections cite human-interpretable financial reasons.
 
 ---
 
