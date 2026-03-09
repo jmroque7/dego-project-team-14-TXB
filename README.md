@@ -41,7 +41,7 @@ NovaCred's credit application dataset and decision pipeline contain material gov
 
 On **data quality**, the raw dataset contains 502 records, two of which appear twice with conflicting values — not ingestion duplicates, but conflicting entries indicating a record integrity failure. After governance-oriented de-duplication the working dataset is 500 records across 34 columns. Additional issues include inconsistent gender coding across five variants, date-of-birth stored in four distinct formats, an undocumented income field duplication, invalid numeric values, and 11 email addresses failing structural validation. Governance-sensitive fields — identifiers, decision outcomes, rejection reasons — are never imputed.
 
-On **algorithmic fairness**, female applicants are approved at 50.6% versus 65.7% for males, producing a Disparate Impact ratio of 0.77 — below the legally significant 0.80 four-fifths threshold (p < 0.001). Age-based disparities are equally significant: the 18–30 cohort has a 44.5% approval rate versus 68.7% for 41–50 year-olds (age DI = 0.648). ZIP code functions as a near-perfect gender proxy (correlation = −0.805), replicating the gender gap even after gender is excluded from the model. The most severe subgroup disparity is among women aged 25–34 — a 23 pp gap versus male counterparts confirmed statistically within that cohort (p = 0.008).
+On **algorithmic fairness**, female applicants are approved at 50.6% versus 65.7% for males, producing a Disparate Impact ratio of 0.77 — below the legally significant 0.80 four-fifths threshold (p = 0.0009). Age-based disparities are equally significant: the Young (18–35) cohort has a 45.8–48.2% approval rate versus 62.5–65.9% for Middle (36–65) cohorts (age chi-square p = 0.0004). ZIP code functions as a near-perfect gender proxy (AUC = 0.864), replicating the gender gap even after gender is excluded from the model. The most severe subgroup disparity is among women aged 25–34 — a 20.3 pp gap versus male counterparts in the Young (18–35) cohort (p = 0.0088).
 
 On **privacy and governance**, all direct identifiers — full name, SSN, email, and IP address — are stored in plaintext with no encryption, pseudonymisation, or access controls. There is no documented lawful processing basis, no consent tracking, no retention policy, and no deletion mechanism. Of 500 applications, 169 automated rejections were issued with no human review, no explanation, and no appeal pathway — a direct violation of GDPR Article 22. The system qualifies as High-Risk under EU AI Act Annex III and currently meets none of the required controls.
 
@@ -116,7 +116,7 @@ The notebook flattens the nested JSON structure into a tabular format and assess
 
 ### Consistency
 
-#### Issue 4 — Inconsistent gender coding *(113 records, 22.6%)*
+#### Issue 4 — Inconsistent gender coding *(113 records, 22.5%)*
 
 **Finding:** The `gender` field uses five representations for two logical values: `"Male"`, `"M"`, `"Female"`, `"F"`, and empty/null.
 
@@ -161,7 +161,7 @@ Records where day ≤ 12 are ambiguous between EU and US formats.
 
 #### Issue 8 — `debt_to_income` > 1.0 *(1 record, 0.2%)*
 
-**Finding:** 1 record has a DTI ratio exceeding 1.0, meaning recorded debt exceeds income — not a valid financial state.
+**Finding:** 1 record has a negative savings balance — a domain impossibility. NB01 reports `invalid_debt_to_income: 0` (no DTI violations found).
 
 **Action:** Set to `NaN`. Not imputed — DTI is decision-relevant and imputing it would introduce noise into downstream fairness analysis.
 
@@ -233,12 +233,12 @@ Male   (n=248)  |##########################|  65.7%
 DI ratio           =  50.6 / 65.7  =  0.77   FAIL (threshold: 0.80)
 Chi-square p-value                  <  0.001
 Cramer's V (effect size)            =  0.149
-Fairlearn DPR                       =  0.767
+Fairlearn DPR                       =  0.77
 Fairlearn DPD                       =  0.154
 Absolute approval gap               =  15.1 pp
 ```
 
-**Interpretation:** The DI ratio of 0.77 falls below the legally significant 0.80 four-fifths threshold. The chi-square result (p < 0.001) confirms the pattern is not attributable to sampling noise. Cramér's V = 0.149 indicates a small but statistically robust and practically significant effect.
+**Interpretation:** The DI ratio of 0.77 falls below the legally significant 0.80 four-fifths threshold. The chi-square result (p = 0.0009) confirms the pattern is not attributable to sampling noise. Cramér's V = 0.149 indicates a small but statistically robust and practically significant effect.
 
 ---
 
@@ -247,32 +247,31 @@ Absolute approval gap               =  15.1 pp
 ```
 Approval Rate by Age Group (%)
 ==============================================
-18-30  |#################         |  44.5%   LOWEST
-31-40  |########################  |  61.7%
-41-50  |##########################|  68.7%   PEAK
-51-65  |########################  |  58.1%
+18–25  |##################        |  45.8%   (n=24)
+26–35  |###################       |  48.2%   LOWEST  (n=162)
+36–45  |##########################|  65.9%   PEAK   (n=164)
+36–45  |##########################|  65.9%   PEAK   (n=164)
+56–65  |#######################   |  62.5%          (n=56)
+65+    |####################      |  50.0%          (n=6)
 
-Age DI (18-30 vs 41-50)  =  0.648   FAIL (threshold: 0.80)
+Age chi-square (18–35 vs 36–65): p = 0.0004  (significant disparity)
 Chi-square p-value        =  0.0004
-Fairlearn DPD             =  0.242   (24.2 pp range)
+Gender gap in Young (18–35): 20.3 pp  (p = 0.0088, significant)
 ```
 
-**Interpretation:** Younger applicants face structural disadvantage. The 18–30 cohort is 24.2 percentage points below the peak approval group. Age DI = 0.648 is substantially below the legal threshold.
+**Interpretation:** Younger applicants face structural disadvantage. The 18–25 and 26–35 cohorts both fall below 50% approval — significantly behind the peak 36–45 cohort (65.9%). The age disparity is confirmed by chi-square (p = 0.0004). Gender differences within the Young (18–35) group are the only statistically significant intersectional finding (p = 0.0088).
 
 ---
 
 ### Intersectional Analysis — Gender × Age
 
-| Age Group | Female Rate | Male Rate | Gap | Status |
-|---|---:|---:|---:|---|
-| 18–24 | 50.0% | 60.0% | 10.0 pp | ⚠ Low sample (n<20) |
-| **25–34** | **33.3%** | **56.3%** | **23.0 pp** | **✗ Most Severe** |
-| 35–44 | 60.0% | 72.0% | 12.0 pp | ✓ Acceptable |
-| 45–54 | 61.0% | 66.0% | 5.0 pp | ✓ Acceptable |
-| **55–64** | **54.8%** | **72.0%** | **17.2 pp** | **✗ Severe** |
-| 65+ | 50.0% | 60.0% | 10.0 pp | ⚠ Low sample (n<20) |
+| Age Group | Female Rate | n | Male Rate | n | Gap | χ² test |
+|---|---:|---:|---:|---:|---:|---|
+| **Young (18–35)** | **38.1%** | 97 | **58.4%** | 89 | **20.3 pp** | **p = 0.0088 ✗** |
+| Middle (36–65) | 59.1% | 149 | 69.7% | 155 | 10.6 pp | p = 0.0697 (n.s.) |
+| Senior (65+) | 33.3% | 3 | 66.7% | 3 | 33.3 pp | n < 6 — inconclusive |
 
-**Key finding:** Female 25–34 subgroup shows the largest approval gap in the dataset (23 pp, p = 0.008 within that cohort). The 55–64 cohort shows a secondary severe gap (17.2 pp). Neither finding surfaces in aggregate-level DI metrics. **Worst case: Female 18–30 (32.8%) vs Male 41–50 (76.0%) = 43.2 pp gap.**
+**Key finding:** The Young (18–35) cohort shows the only statistically significant gender gap (20.3 pp, p = 0.0088). The Middle (36–65) gap of 10.6 pp does not reach significance (p = 0.0697). Neither finding surfaces in aggregate DI metrics alone. Senior (65+) results are inconclusive due to n<6 per subgroup.
 
 ---
 
@@ -284,7 +283,7 @@ A proxy variable is a non-protected feature that is highly correlated with a pro
 
 | Variable | Corr / Gender | Corr / Age | Corr / Outcome | Assessment |
 |---|---:|---:|---:|---|
-| `zip_code` | **−0.805** | — | −0.126 | **High — strongest gender proxy** |
+| `zip_code` | **AUC=0.864** (gender proxy) | — | −0.126 | **High — strongest gender proxy** |
 | `credit_history_months` | — | **+0.649** | +0.150 | **High — primary age proxy** |
 | `annual_income` | — | +0.390 | +0.180 | Medium proxy risk |
 
@@ -307,7 +306,7 @@ A proxy variable is a non-protected feature that is highly correlated with a pro
 | `email` | Direct Identifier | High | 493 | Stored in plaintext — remove from analytical layer |
 | `ip_address` | Technical Identifier | High | 500 | No modelling value — delete entirely (GDPR Art. 4(1)) |
 | `gender` | Protected Attribute | High | 500 | DI = 0.77 confirmed — exclude from all model inputs |
-| `zip_code` | Quasi-Identifier | High | 499 | Gender proxy corr = −0.805 — transform or exclude |
+| `zip_code` | Quasi-Identifier | High | 499 | Gender proxy AUC = 0.864 — transform or exclude |
 | `date_of_birth` | Quasi-Identifier | High | 470 | Full date exceeds minimisation — generalise to `age_group` |
 | `annual_income` | Quasi-Identifier | Medium | 500 | Undocumented merge origin — use income brackets |
 | `healthcare / gambling spend` | Sensitive Behavioural | Medium | 68 / 7 | Purpose undocumented — GDPR Art. 9 applies |
@@ -399,7 +398,7 @@ All figures are generated directly from the cleaned dataset (`Data/flat_credit_a
 
 ![Approval Rate by Gender](reports/figures/fig1_approval_by_gender.png)
 
-Female applicants are approved at 50.6% vs 65.7% for male applicants. The Disparate Impact ratio of 0.77 falls below the legally significant 0.80 four-fifths threshold (chi-square p < 0.001). The dashed line marks the minimum approval rate female applicants would need to meet for the system to pass the four-fifths rule.
+Female applicants are approved at 50.6% vs 65.7% for male applicants. The Disparate Impact ratio of 0.77 falls below the legally significant 0.80 four-fifths threshold (chi-square p = 0.0009). The dashed line marks the minimum approval rate female applicants would need to meet for the system to pass the four-fifths rule.
 
 ---
 
@@ -407,7 +406,7 @@ Female applicants are approved at 50.6% vs 65.7% for male applicants. The Dispar
 
 ![Approval Rate by Age Group](reports/figures/fig2_approval_by_age.png)
 
-The 18–30 cohort is approved at only 38.5% versus 70.5% for the peak 41–50 group — an age Disparate Impact ratio of 0.546, far below the 0.80 threshold (p = 0.0004). Younger applicants are structurally disadvantaged, partly because credit\_history\_months acts as an age proxy.
+The 18–25 and 26–35 cohorts are approved at 45.8% and 48.2% respectively, well below the 36–45 peak (65.9%). Age disparity is confirmed by chi-square (p = 0.0004). Younger applicants are structurally disadvantaged partly because credit\_history\_months acts as an age proxy.
 
 ---
 
@@ -415,7 +414,7 @@ The 18–30 cohort is approved at only 38.5% versus 70.5% for the peak 41–50 g
 
 ![Intersectional Bias Gender x Age](reports/figures/fig3_approval_gender_x_age.png)
 
-Intersectional analysis reveals disparities invisible in single-axis metrics. The most severe subgroup gap is in the 18–30 cohort: female applicants approved at 30% vs 50% for males (20 pp gap). The 51–65 cohort shows a secondary severe gap of 15 pp. Aggregate DI ratios alone would not surface these patterns.
+Intersectional analysis using three macro groups (Young 18–35, Middle 36–65, Senior 65+). The Young cohort shows the only statistically significant gender gap: Female 38.1% vs Male 58.4% — a 20.3 pp gap (p = 0.0088). The Middle cohort gap of 10.6 pp does not reach significance (p = 0.0697). Aggregate DI ratios alone would not surface these patterns.
 
 ---
 
@@ -441,10 +440,9 @@ None of these obligations can be addressed in isolation. Remediation requires co
 502 -> 500   records after de-duplication
         34   columns in cleaned dataset
       0.77   gender DI ratio  (legal threshold: 0.80)  FAIL
-     0.648   age DI ratio, youngest vs peak cohort     FAIL
-    -0.805   ZIP code correlation with gender (p = 0.005)
-      23 pp  largest subgroup gap (female vs male, 25-34)
-    43.2 pp  worst intersectional gap (female 18-30 vs male 41-50)
+    0.0004   age chi-square p-value (18–35 vs 36–65)     SIGNIFICANT
+     0.864   ZIP code gender-proxy AUC (5-fold CV mean = 0.849)
+    20.3 pp  largest significant gender gap (Young 18–35, p = 0.0088)
        169   automated rejections — no human review or explanation
          8   GDPR / AI Act compliance gaps identified
          5   direct/quasi-identifiers stored in plaintext
