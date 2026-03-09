@@ -39,11 +39,11 @@ project-team14-TXB/
 
 NovaCred's credit application dataset and decision pipeline contain material governance failures across all three dimensions audited.
 
-On **data quality**, the raw dataset contains 502 records, two of which appear twice with conflicting values — not ingestion duplicates, but conflicting entries indicating a record integrity failure. After governance-oriented de-duplication the working dataset is 500 records across 34 columns. Additional issues include inconsistent gender coding across five variants, date-of-birth stored in four distinct formats, an undocumented income field duplication, invalid numeric values, and 11 email addresses failing structural validation. Governance-sensitive fields — identifiers, decision outcomes, rejection reasons — are never imputed.
+On **data quality**, the raw dataset contains 502 records, two of which appear twice with conflicting values — not ingestion duplicates, but conflicting entries indicating a record integrity failure. After governance-oriented de-duplication the working dataset is 500 records across 24 columns. Additional issues include inconsistent gender coding across five variants, date-of-birth stored in four distinct formats, an undocumented income field duplication, invalid numeric values, and 11 email addresses failing structural validation. Governance-sensitive fields — identifiers, decision outcomes, rejection reasons — are never imputed.
 
-On **algorithmic fairness**, female applicants are approved at 50.6% versus 65.7% for males, producing a Disparate Impact ratio of 0.77 — below the legally significant 0.80 four-fifths threshold (p = 0.0009). Age-based disparities are equally significant: the Young (18–35) cohort has a 45.8–48.2% approval rate versus 62.5–65.9% for Middle (36–65) cohorts (age chi-square p = 0.0004). ZIP code functions as a near-perfect gender proxy (AUC = 0.864), replicating the gender gap even after gender is excluded from the model. The most severe subgroup disparity is among women aged 25–34 — a 20.3 pp gap versus male counterparts in the Young (18–35) cohort (p = 0.0088).
+On **algorithmic fairness**, female applicants are approved at 50.6% versus 65.7% for males, producing a Disparate Impact ratio of 0.77 — below the legally significant 0.80 four-fifths threshold (p = 0.0009). Age-based disparities are equally significant: the Young (18–35) cohort has a 45.8–48.2% approval rate versus 62.5–65.9% for Middle (36–65) cohorts (age chi-square p = 0.0004). ZIP code functions as a near-perfect gender proxy (AUC = 0.849), replicating the gender gap even after gender is excluded from the model. The most severe subgroup disparity is among women aged 25–34 — a 20.3 pp gap versus male counterparts in the Young (18–35) cohort (p = 0.0088).
 
-On **privacy and governance**, all direct identifiers — full name, SSN, email, and IP address — are stored in plaintext with no encryption, pseudonymisation, or access controls. There is no documented lawful processing basis, no consent tracking, no retention policy, and no deletion mechanism. Of 500 applications, 169 automated rejections were issued with no human review, no explanation, and no appeal pathway — a direct violation of GDPR Article 22. The system qualifies as High-Risk under EU AI Act Annex III and currently meets none of the required controls.
+On **privacy and governance**, all direct identifiers — full name, SSN, email, and IP address — are stored in plaintext with no encryption, pseudonymisation, or access controls. There is no documented lawful processing basis, no consent tracking, no retention policy, and no deletion mechanism. Of 500 applications, 170 automated rejections were issued with no human review, no explanation, and no appeal pathway — a direct violation of GDPR Article 22. The system qualifies as High-Risk under EU AI Act Annex III and currently meets none of the required controls.
 
 ---
 
@@ -56,7 +56,7 @@ On **privacy and governance**, all direct identifiers — full name, SSN, email,
 |  Columns in scope:        34                      |
 |  Approved loans:         290 / 500  (58.0%)       |
 |  Rejected loans:         210 / 500  (42.0%)       |
-|  Automated rejections:   169   (no human review)  |
+|  Automated rejections:   170   (no human review)  |
 |  GDPR / AI Act gaps:       8                      |
 +--------------------------------------------------+
 ```
@@ -106,7 +106,7 @@ The notebook flattens the nested JSON structure into a tabular format and assess
 
 #### Issue 3 — Missing `rejection_reason` *(structural — 58.2% of records)*
 
-**Finding:** Rejection reason is absent for all approved applications (structurally expected) and for many rejections. 169 automated rejections have no rejection reason recorded.
+**Finding:** Rejection reason is absent for all approved applications (structurally expected) and for many rejections. 170 automated rejections have no rejection reason recorded.
 
 **Governance impact:** GDPR Art. 22(3) and EU AI Act Art. 13 require automated decisions to be explainable. Missing rejection reasons are themselves a compliance failure — not merely a data quality issue.
 
@@ -283,7 +283,7 @@ A proxy variable is a non-protected feature that is highly correlated with a pro
 
 | Variable | Corr / Gender | Corr / Age | Corr / Outcome | Assessment |
 |---|---:|---:|---:|---|
-| `zip_code` | **AUC=0.864** (gender proxy) | — | −0.126 | **High — strongest gender proxy** |
+| `zip_code` | **AUC=0.849** (gender proxy) | — | −0.126 | **High — strongest gender proxy** |
 | `credit_history_months` | — | **+0.649** | +0.150 | **High — primary age proxy** |
 | `annual_income` | — | +0.390 | +0.180 | Medium proxy risk |
 
@@ -306,7 +306,7 @@ A proxy variable is a non-protected feature that is highly correlated with a pro
 | `email` | Direct Identifier | High | 493 | Stored in plaintext — remove from analytical layer |
 | `ip_address` | Technical Identifier | High | 500 | No modelling value — delete entirely (GDPR Art. 4(1)) |
 | `gender` | Protected Attribute | High | 500 | DI = 0.77 confirmed — exclude from all model inputs |
-| `zip_code` | Quasi-Identifier | High | 499 | Gender proxy AUC = 0.864 — transform or exclude |
+| `zip_code` | Quasi-Identifier | High | 499 | Gender proxy AUC = 0.849 — transform or exclude |
 | `date_of_birth` | Quasi-Identifier | High | 470 | Full date exceeds minimisation — generalise to `age_group` |
 | `annual_income` | Quasi-Identifier | Medium | 500 | Undocumented merge origin — use income brackets |
 | `healthcare / gambling spend` | Sensitive Behavioural | Medium | 68 / 7 | Purpose undocumented — GDPR Art. 9 applies |
@@ -323,7 +323,7 @@ A proxy variable is a non-protected feature that is highly correlated with a pro
 | 03 | Data subject rights | No access, erasure, explanation, or contestability mechanism | GDPR Art. 15–22 |
 | 04 | Security controls | No encryption, RBAC, access logging, or pseudonymisation | GDPR Art. 25 / 32 |
 | 05 | Retention and deletion | No retention policy, timestamps, or automated deletion | GDPR Art. 5(1)(e) / 17 |
-| 06 | Automated decisions | 169 rejections issued without human review or explanation | GDPR Art. 22 |
+| 06 | Automated decisions | 170 rejections issued without human review or explanation | GDPR Art. 22 |
 | 07 | No audit trail | No `decision_id`, `model_version`, or `decision_timestamp` fields | EU AI Act Art. 12 / 13 |
 | 08 | High-Risk AI system | Qualifies under Annex III — zero conformity controls in place | EU AI Act Art. 6 / 10 |
 
@@ -422,7 +422,7 @@ Intersectional analysis using three macro groups (Young 18–35, Middle 36–65,
 
 ![Rejection Reason Breakdown](reports/figures/fig4_rejection_reasons.png)
 
-Of 210 total rejections, 169 (80.5%) cite `algorithm_risk_score` as the sole reason. These rejections were issued with no human review, no plain-language explanation, and no appeal pathway — a direct violation of GDPR Article 22 and EU AI Act Article 14. The remaining 41 rejections cite human-interpretable financial reasons.
+Of 210 total rejections, 170 (81.0%) cite `algorithm_risk_score` as the sole reason. These rejections were issued with no human review, no plain-language explanation, and no appeal pathway — a direct violation of GDPR Article 22 and EU AI Act Article 14. The remaining 40 rejections cite human-interpretable financial reasons.
 
 ---
 
@@ -438,12 +438,12 @@ None of these obligations can be addressed in isolation. Remediation requires co
 
 ```
 502 -> 500   records after de-duplication
-        34   columns in cleaned dataset
+        24   columns in cleaned dataset
       0.77   gender DI ratio  (legal threshold: 0.80)  FAIL
     0.0004   age chi-square p-value (18–35 vs 36–65)     SIGNIFICANT
-     0.864   ZIP code gender-proxy AUC (5-fold CV mean = 0.849)
+     0.849   ZIP code gender-proxy AUC (5-fold CV mean = 0.849)
     20.3 pp  largest significant gender gap (Young 18–35, p = 0.0088)
-       169   automated rejections — no human review or explanation
+       170   automated rejections — no human review or explanation
          8   GDPR / AI Act compliance gaps identified
          5   direct/quasi-identifiers stored in plaintext
 ```
